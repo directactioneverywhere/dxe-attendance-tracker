@@ -1,13 +1,15 @@
 <?php
-  // todo; this should really be based on chapter
+  // TODO; this should really be based on chapter
   // Although it looks like airtable doesn't care about timezones?
   date_default_timezone_set('America/Los_Angeles');
 
   session_start();
   require_once ('google-api-php-client/src/Google/autoload.php');
 
+  // FIXME: This should use environment variables
   require_once('attend/googleCredentials.php');
-  $redirect_uri  = 'http://' . $_SERVER['HTTP_HOST'] . '/attend/';
+
+  $redirect_uri  = 'http://' . $_SERVER['HTTP_HOST'];
 
   $client = new Google_Client();
   $client->setClientId($client_id);
@@ -27,12 +29,12 @@
       echo missingServiceAccountDetailsWarning();
       exit;
     }
-    
+
     $service_client = new Google_Client();
     $service_client->setApplicationName("DxE Attendance");
     $book_service = new Google_Service_Books($service_client);
     $directory_service = new Google_Service_Directory($service_client);
-    
+
     /************************************************
       If we have an access token, we can carry on.
       Otherwise, we'll get one with the help of an
@@ -110,7 +112,7 @@
 
       // Is logged in user part of the given group?
       // This will throw an exception if not
-      $response = $directory_service->members->get($attendance_group_key, 
+      $response = $directory_service->members->get($attendance_group_key,
                                                    $token_data['payload']['sub']);
       // For good measure though...
       assert(($response->{'role'} == 'OWNER') || ($response->{'role'} == 'MANAGER') || ($response->{'role'} == 'MEMBER'));
@@ -122,7 +124,7 @@
     error_log(print_r($token_data, True));
     $token_data = NULL;
     $authUrl = $client->createAuthUrl();
-  } 
+  }
 
   echo get_page_header("DxE Attendance");
   if (strpos($client_id, "googleusercontent") == false) {
@@ -131,10 +133,10 @@
   }
 
   print '<div class="box">';
-  
+
   if (!isset($token_data) || isset($authUrl)) {
     print "<div class='request'><a class='login' href='" . $authUrl . "'>Login</a></div>";
-    print "</div>\n"; // box 
+    print "</div>\n"; // box
     print get_page_footer();
     exit;
   } else {
@@ -145,7 +147,9 @@
   }
   print '</div>'; // box
 
+  // FIXME: This should use environment variables
   require_once('attend/airtableCredentials.php');
+
   $airtable_url = "https://api.airtable.com/v0/" . $AIRTABLE_BASE_ID;
   $airtable_ch  = NULL;
 
@@ -161,7 +165,7 @@
       curl_setopt($airtable_ch, CURLOPT_RETURNTRANSFER, 1);
       curl_setopt($airtable_ch, CURLOPT_POST, True);
       curl_setopt($airtable_ch, CURLOPT_HTTPHEADER, array(
-	"Authorization: Bearer " . $AIRTABLE_API_KEY, 
+	"Authorization: Bearer " . $AIRTABLE_API_KEY,
         "Content-type: application/json"));
     }
     error_log("Create record with table = " . $table);
@@ -169,13 +173,13 @@
     $uri = "/" . rawurlencode($table);
 
     curl_setopt($airtable_ch, CURLOPT_URL, $airtable_url . $uri);
-    curl_setopt($airtable_ch, CURLOPT_POSTFIELDS, json_encode($fields)); 
+    curl_setopt($airtable_ch, CURLOPT_POSTFIELDS, json_encode($fields));
     $return_json = curl_exec($airtable_ch);
     if (curl_errno($airtable_ch)) {
-       error_log("Error: " . curl_error($airtable_ch)); 
+       error_log("Error: " . curl_error($airtable_ch));
        print "An error occurred.";
        return null;
-    }  
+    }
     $return_data = json_decode($return_json);
     error_log(print_r($return_json, true));
     return $return_data->{"id"};
@@ -192,16 +196,16 @@
       // remove them from attendees
       unset($posted->{"attendees"}->{$id});
 
-      // split up name into First and Last (crudely) 
+      // split up name into First and Last (crudely)
       $names = split(" ", $name, 2);
       if (count($names) == 0) { continue; }
       // populate the fields to send to airtable for the new member
       $fields = array();
       $fields["first_name"]   = $names[0];
-      if (count($names) > 1) { 
-        $fields["last_name"]  = $names[1]; 
+      if (count($names) > 1) {
+        $fields["last_name"]  = $names[1];
       }
-      $fields["member_since"] = date("Y-m-d"); 
+      $fields["member_since"] = date("Y-m-d");
       $fields["chapter_id"]   = array($posted->{"chapter_id"});
       $fields["notes"]        = "Added by attendance app for event " . $posted->{"event_name"};
       $new_id = create_record("All Members", array( "fields" => $fields));
@@ -222,7 +226,7 @@
     if (!is_null($event_id)) {
        print "<li>Added event '" . $posted->{"event_name"} . "' with " . count($fields["Attendees"]) . " attendees.</li>\n";
     }
-    
+
     if (!is_null($airtable_ch)) { curl_close($airtable_ch); }
     return;
   }
@@ -234,23 +238,24 @@
 <html>
 <head>
 <title>' . $title . '</title>
-<script src="jquery-1.11.3.min.js"></script>
-<script src="jquery-ui-1.11.3.min.js"></script>
-<script src="jquery-dateFormat.min.js"></script>
-<link rel="stylesheet" type="text/css" href="jquery-ui-1.11.3.min.css">
-<link rel="stylesheet" type="text/css" href="attend.css">
+<script src="/static/vendor/jquery-1.11.3.min.js"></script>
+<script src="/static/vendor/jquery-ui-1.11.3.min.js"></script>
+<script src="/static/vendor/jquery-dateFormat.min.js"></script>
+<link rel="stylesheet" type="text/css" href="/static/vendor/jquery-ui-1.11.3.min.css">
+<link rel="stylesheet" type="text/css" href="/static/attend.css">
 </head>
 <body>
 ';
     return $header;
   }
-  
+
   function get_page_footer() {
     return '</body></html>';
   }
 
-  // todo: move this file to a place not accessible on the server
+  // FIXME: this should be done differently
   $airtable_cache_str = file_get_contents("/usr/share/php/attend/members_data.json");
+
   $airtable_cache = json_decode($airtable_cache_str, true);
 
   /* function that returns all the records in the given view of the given table
@@ -284,10 +289,10 @@
 
       $return_json = curl_exec($airtable_ch);
       if (curl_errno($airtable_ch)) {
-         error_log("Error: " . curl_error($airtable_ch)); 
+         error_log("Error: " . curl_error($airtable_ch));
          print "An error occurred.";
          return null;
-      }  
+      }
       $return_data = json_decode($return_json);
       $offset = $return_data->offset;
       $return_records = array_merge($return_records, $return_data->records);
@@ -301,7 +306,7 @@
 
 <h2>Select your chapter</h2>
 
-<form id="form_attend" action="attend.php">
+<form id="form_attend" action="<?php echo $_SERVER['PHP_SELF']; ?>">
   <?php
     $chapters = get_all_records('Chapters','Main View');
     if ($chapters !== null) {
@@ -309,8 +314,8 @@
       print "<script type=\"text/javascript\">\n";
       print "var chapters = " . json_encode($chapters) . ";\n";
       print "</script>\n";
-  
-      // Create chapter select widget 
+
+      // Create chapter select widget
       print '<select id="select_chapter" name="select_chapter">';
       for ($chapter_index = 0; $chapter_index < count($chapters); $chapter_index++) {
          print "<pre>";
@@ -327,12 +332,12 @@
            print $chapters[$chapter_index]["fields"]['Name'];
          } else {
            print $chapters[$chapter_index]->fields->{'Name'};
-         } 
+         }
          print "</option>\n";
       }
       print "</select>\n";
     }
-  
+
     // all members
     $members = get_all_records('All Members', 'Main View');
     if ($members !== null) {
@@ -342,22 +347,22 @@
       print "</script>\n";
     }
   ?>
-  
+
   <h2>Name your event</h2>
-  
+
   <div class="ui-widget">
     <label for="input_event">Event Name:</label>
     <input id="input_event" type="text">
   </div>
-  
+
   <h2>Who is here?</h2>
-  
+
   <div class="ui-widget">
     <label for="input_peeps">Name:</label>
     <input id="input_peeps" type="text">
   </div>
   <br />
-  
+
   <div id="add_error" style="color:red; padding:10px" hidden=true></div>
 
   <div id="progressbar" hidden=true></div>
@@ -369,9 +374,9 @@
 
 </form>
 
-<script src="attend.js"></script>
+<script src="/static/attend.js"></script>
 <script type="text/javascript">
-// initialize the progress bar 
+// initialize the progress bar
 $( "#progressbar" ).progressbar({ value: false });
 // initialize the button (disabled) while no attendees exist
 $( "#submit_button" ).button({ disabled: true });
